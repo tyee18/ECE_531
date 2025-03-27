@@ -1,0 +1,7 @@
+*.ova
+*.png
+*.exe
+EXE_files/
+libiio_windows/
+Pluto_Utils/
+Windows/
