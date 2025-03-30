@@ -72,8 +72,9 @@ for testFactors = 1:length(rollOffFactors_2_2)
         % Add noise at the rx
         rxSig = awgn(delayedsig,25); % Add noise
         rxFilt = [rxFilt;rcrFilt(rxSig)]; % Rx filter
-        demodFiltData = qpskDeMod(rcrFilt(rxSig));
-        newRxFilt = rcrFilt(rxSig);
+        demodNoiseData = qpskDeMod(rcrFilt(rxSig));
+        demodFiltData  = qpskDeMod(rcrFilt(rxFilt));
+        %newRxFilt = rcrFilt(rxSig);
     end
 
     % For Subplot 1:
@@ -91,6 +92,7 @@ for testFactors = 1:length(rollOffFactors_2_2)
         end
     end
 
+    %{
     % For Subplot 2:
     % Fill in the tx and rx data lost due to decimation, compared to the Rx
     % filter output
@@ -105,9 +107,9 @@ for testFactors = 1:length(rollOffFactors_2_2)
             newFiltDataSub2(subplot2_FiltInd) = newRxFilt(ogRxFiltInd)
         end
     end
+    %}
 
     % For Subplot 2:
-%{
     % Fill in the tx and rx data lost due to decimation, compared to the Rx
     % filter output
     newTxDataSub2 = [];
@@ -119,20 +121,18 @@ for testFactors = 1:length(rollOffFactors_2_2)
         newTxDataSub2(subplot2_txDataInd+1:1:ogTxDataInd*rxFiltTxDataRatio) = nan;
         ogTxDataInd = ogTxDataInd + 1;
     end
-
+%{
     newDemodDataSub2 = [];
     ogDemodDataInd   = 1;
-    rxFiltDemodRatio = length(rxFilt) / length(demodFiltData);
+    rxFiltDemodRatio = length(rxFilt) / length(demodNoiseData);
 
     for subplot2_demodDataInd = 1:rxFiltDemodRatio:length(rxFilt)
-        newDemodDataSub2(subplot2_demodDataInd) = demodFiltData(ogDemodDataInd);
+        newDemodDataSub2(subplot2_demodDataInd) = demodNoiseData(ogDemodDataInd);
         newDemodDataSub2(subplot2_demodDataInd+1:1:ogDemodDataInd*rxFiltDemodRatio) = nan;
         ogDemodDataInd = ogDemodDataInd + 1;
     end
-    %}
-
+%}
     %% Subplot 1: Tx Data, Rx Data w/ Noise, Tx SRRC
-
     figure;
     subplot(3, 1, 1);
     hold on;
@@ -150,11 +150,10 @@ for testFactors = 1:length(rollOffFactors_2_2)
     xlabel('Time (ms)');
     ylabel('Amplitude');
     hold on;
-    %{
     stem(newTxDataSub2, '-kx');
     plot(abs(rxFilt), 'r');
-    stem(newDemodDataSub2, '-mo');
-    %}
+    stem(demodFiltData, '-mo');
+    %{
     stem(newTxDataSub1, '-kx');
     plot(abs(newFiltDataSub2), 'r');
     stem(demodFiltData, '-mo');
@@ -170,8 +169,9 @@ for testFactors = 1:length(rollOffFactors_2_2)
     hold on;
     stem(newTxDataSub1, '-kx');
     plot(abs(rxSig), 'r');
-    stem(demodFiltData, '-mo');
+    stem(demodNoiseData, '-mo');
     hold off;
     legend('Transmitted Data', 'Received Data With Noise', 'Demodulated');
-    x = 2;
+
+    
 end
