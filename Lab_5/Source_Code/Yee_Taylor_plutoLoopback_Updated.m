@@ -1,3 +1,6 @@
+clear all; close all;
+rollOffFactor = 0;
+
 % User tunable (samplesPerSymbol>=decimation)
 samplesPerSymbol = 12; decimation = 4;
 % Set up radio
@@ -9,9 +12,11 @@ data = randi([0 1],2^15,1);
 qpskMod = comm.QPSKModulator('BitInput',true); modData = qpskMod(data);
 % Set up filters
 rctFilt = comm.RaisedCosineTransmitFilter( ...
-    'OutputSamplesPerSymbol', samplesPerSymbol);
+    'OutputSamplesPerSymbol', samplesPerSymbol, ...
+    'RolloffFactor', rollOffFactor);
 rcrFilt = comm.RaisedCosineReceiveFilter( ...
     'InputSamplesPerSymbol',  samplesPerSymbol, ...
+    'RolloffFactor', rollOffFactor, ...
     'DecimationFactor',       decimation);
 % Pass data through radio
 tx.transmitRepeat(rctFilt(modData)); data = rcrFilt(rx());
