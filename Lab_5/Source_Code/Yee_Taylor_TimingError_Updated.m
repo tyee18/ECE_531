@@ -1,3 +1,4 @@
+clear all; close all;
 
 %% General system details
 sampleRateHz = 1e6; samplesPerSymbol = 8;
@@ -19,7 +20,7 @@ timingOffset = samplesPerSymbol*0.01; % Samples
 
 %% Generate symbols
 data = randi([0 modulationOrder-1], numSamples*2, 1);
-mod = comm.DBPSKModulator(); modulatedData = mod(data);
+modulatorObject = comm.DBPSKModulator(); modulatedData = modulatorObject(data);
 %% Add TX/RX Filters
 TxFlt = comm.RaisedCosineTransmitFilter(...
     'OutputSamplesPerSymbol', samplesPerSymbol,...
@@ -40,9 +41,11 @@ evm = comm.EVM;
 
 %% TED-specific variables initialized here
 TriggerHistory    = [];
-InterpFilterState = zeros(1, 3);
+TEDBuffer         = [];
+InterpFilterState = 0;
 Trigger           = 0;
 mu                = 0;
+counter           = 0;
 LoopFilterState   = 0;
 LoopPreviousInput = 0;
 ProportionalGain  = 0.1; % Tune as needed
@@ -62,74 +65,82 @@ for k=1:frameSize:(numSamples - frameSize)
     % Phase offset signal
     phaseOffsetData = pfo(offsetData);
     % Filter signal
-    filteredData = RxFlt(offsetData);filteredDataRef = RxFltRef(noisyData);
+    filteredData = RxFlt(offsetData);
+    filteredDataRef = RxFltRef(noisyData);
 
     %% Everything else here is new: implement TED here:
-    
-    %% Block 1: Interpolator (interpFilter.m)
-    %% Receives input from both matched filter and controller, feeds out to
-    %% both TED and subsequent data points
-    % Define interpolator coefficients
-    alpha = 0.5;
-    InterpFilterCoeff = ...
-        [ 0,       0,         1,       0;    % Constant
-        -alpha, 1+alpha, -(1-alpha), -alpha; % Linear
-        alpha,  -alpha,    -alpha,   alpha]; % Quadratic
-    % Filter input data
-    ySeq = [filteredData(k); InterpFilterState]; % Update delay line
-    % Produce filter output
-    filtOut = sum((InterpFilterCoeff * ySeq) .* [1; mu; mu^2]);
-    InterpFilterState = ySeq(1:3); % Save filter input data
-    
-    
-    %% Block 2: TED (zcTED.m) - using zero-crossing method
-    % ZC-TED calculation occurs on a strobe
-    if Trigger && all(~TriggerHistory(2:end))
-        % Calculate the midsample point for odd or even samples per symbol
-        t1 = TEDBuffer(end/2 + 1 - rem(samplesPerSymbol,2));
-        t2 = TEDBuffer(end/2 + 1);
-        midSample = (t1+t2)/2;
-        e = real(midSample)*(sign(real(TEDBuffer(1)))-sign(real(filtOut))) + ...
-            imag(midSample)*(sign(imag(TEDBuffer(1)))-sign(imag(filtOut)));
-    else
-        e = 0;
+    % Loop through filteredData and mitigate timing error
+    % I acknowledge that this doesn't work...things have been difficult and
+    % I feel dumb for not figuring this out.
+    for dataInd = 1:length(filteredData)
+        %% Block 1: Interpolator (interpFilter.m)
+        %% Receives input from both matched filter and controller, feeds out to
+        %% both TED and subsequent data points
+        % todo: this is commented out due to matrix issues...working around it
+        % for now by setting filtOut = filteredData
+        % Define interpolator coefficients
+        alpha = 0.5;
+        InterpFilterCoeff = ...
+            [ 0,       0,         1,       0;    % Constant
+            -alpha, 1+alpha, -(1-alpha), -alpha; % Linear
+            alpha,  -alpha,    -alpha,   alpha]; % Quadratic
+        % Filter input data
+        ySeq = [filteredData(k); InterpFilterState]; % Update delay line
+        % Produce filter output
+        filtOut = sum((InterpFilterCoeff * ySeq) .* [1; mu; mu^2]);
+        InterpFilterState = ySeq(1:3); % Save filter input data
+
+
+        %% Block 2: TED (zcTED.m) - using zero-crossing method
+        % ZC-TED calculation occurs on a strobe
+        if Trigger && all(~TriggerHistory(2:end))
+            % Calculate the midsample point for odd or even samples per symbol
+            t1 = TEDBuffer(end/2 + 1 - rem(samplesPerSymbol,2)); % the "end" here should
+            t2 = TEDBuffer(end/2 + 1);                           % be the length of the data array...
+            midSample = (t1+t2)/2;
+            e = real(midSample)*(sign(real(TEDBuffer(1)))-sign(real(filtOut))) + ...
+                imag(midSample)*(sign(imag(TEDBuffer(1)))-sign(imag(filtOut)));
+        else
+            e = 0;
+        end
+        % Update TED buffer to manage symbol stuffs
+        switch sum([TriggerHistory(2:end), Trigger])
+            case 0
+                % No update required
+            case 1
+                % Shift TED buffer regularly if ONE trigger across samplesPerSymbol samples
+                TEDBuffer = [TEDBuffer(2:end), filtOut];
+            otherwise % > 1
+                % Stuff a missing sample if TWO triggers across samplesPerSymbol samples
+                TEDBuffer = [TEDBuffer(3:end), 0, filtOut];
+        end
+
+
+        %% Block 3: Loop Filter (loopFilter.m)
+        % Loop filter
+        loopFiltOut = LoopPreviousInput + LoopFilterState;
+        g = e*ProportionalGain + loopFiltOut; % Filter error signal
+        LoopFilterState = loopFiltOut;
+        LoopPreviousInput = e*IntegratorGain;
+        % Loop filter (alternative with filter objects)
+        lf = dsp.BiquadFilter('SOSMatrix',tf2sos([1 0],[1 -1])); % Create filter
+        g = lf(IntegratorGain*e) + ProportionalGain*e; % Filter error signal
+
+
+
+        %% Block 4: Controller (interpControl.m) - this also feeds back into Block 1
+        % Interpolation Controller with modulo-1 counter
+        d = g + 1/samplesPerSymbol;
+        TriggerHistory = [TriggerHistory(2:end), Trigger];
+        Trigger = (counter < d); % Check if a trigger condition
+        if Trigger % Upate mu if a trigger
+            mu = counter / d;
+        end
+        counter = mod(counter - d, 1); % Update counter
     end
-    % Update TED buffer to manage symbol stuffs
-    switch sum([TriggerHistory(2:end), Trigger])
-        case 0
-            % No update required
-        case 1
-            % Shift TED buffer regularly if ONE trigger across samplesPerSymbol samples
-            TEDBuffer = [TEDBuffer(2:end), filtOut];
-        otherwise % > 1
-            % Stuff a missing sample if TWO triggers across samplesPerSymbol samples
-            TEDBuffer = [TEDBuffer(3:end), 0, filtOut];
-    end
-    
-    
-    %% Block 3: Loop Filter (loopFilter.m)
-    % Loop filter
-    loopFiltOut = LoopPreviousInput + LoopFilterState;
-    g = e*ProportionalGain + loopFiltOut; % Filter error signal
-    LoopFilterState = loopFiltOut;
-    LoopPreviousInput = e*IntegratorGain;
-    % Loop filter (alternative with filter objects)
-    lf = dsp.BiquadFilter('SOSMatrix',tf2sos([1 0],[1 -1])); % Create filter
-    g = lf(IntegratorGain*e) + ProportionalGain*e; % Filter error signal
-    
-    
-    
-    %% Block 4: Controller (interpControl.m) - this also feeds back into Block 1
-    % Interpolation Controller with modulo-1 counter
-    d = g + 1/samplesPerSymbol;
-    TriggerHistory = [TriggerHistory(2:end), Trigger];
-    Trigger = (Counter < d); % Check if a trigger condition
-    if Trigger % Upate mu if a trigger
-        mu = Counter / d;
-    end
-    Counter = mod(Counter - d, 1); % Update counter
-    % Visualize Error - this can be commented out as needed
+    % Visualize Error as constellation plots - this can be commented out as needed
     %cdPre(filteredDataRef);cdPost(filteredData);pause(0.1); %#ok<*UNRCH>
 end
 
+% Used to calculate EVM as needed
 [testRMSEVM, testMaxEVM, pctEVM] = evm(filteredDataRef, filteredData);
