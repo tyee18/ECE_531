@@ -1,6 +1,9 @@
 *.ova
 *.png
 *.exe
+*.jpg
+*.fig
+*.zip
 EXE_files/
 libiio_windows/
 Pluto_Utils/
