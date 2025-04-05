@@ -30,7 +30,7 @@ TxFlt = comm.RaisedCosineTransmitFilter(...
 RxFlt = comm.RaisedCosineReceiveFilter(...
     'InputSamplesPerSymbol', samplesPerSymbol,...
     'FilterSpanInSymbols', filterSymbolSpan,...
-    'DecimationFactor', samplesPerSymbol);
+    'DecimationFactor', samplesPerSymbol/2);
 RxFltRef = clone(RxFlt);
 %% Add delay
 varDelay = dsp.VariableFractionalDelay;
@@ -39,8 +39,7 @@ varDelay = dsp.VariableFractionalDelay;
 evm = comm.EVM('ReferenceSignalSource','Estimated from reference constellation');
 
 %% Add timing correction
-symbolSync = comm.SymbolSynchronizer('TimingErrorDetector', 'Gardner (non-data-aided)', ...
-    'SamplesPerSymbol',2);
+symbolSync = comm.SymbolSynchronizer('TimingErrorDetector', 'Zero-Crossing (decision-directed)');
 
 %% Model of error
 % Add timing offset to baseband signal
