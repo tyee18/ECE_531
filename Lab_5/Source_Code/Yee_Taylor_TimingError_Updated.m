@@ -40,7 +40,7 @@ chan = comm.AWGNChannel('NoiseMethod','Signal to noise ratio (SNR)','SNR',snr, .
 varDelay = dsp.VariableFractionalDelay;
 
 %% Add error vector magnitude (EVM)
-evm = comm.EVM;
+evm = comm.EVM('ReferenceSignalSource','Estimated from reference constellation');
 
 %% Add timing correction
 symbolSync = comm.SymbolSynchronizer('TimingErrorDetector','Zero-Crossing (decision-directed)', ...
@@ -70,5 +70,4 @@ for k=1:frameSize:(numSamples - frameSize)
 end
 
 % Used to calculate EVM as needed
-filteredDataEVM                = evm(filteredDataRef, filteredData);
-filteredDataTimingCorrectedEVM = evm(filteredDataRef, filteredDataSymbolSync);
+filteredDataEVM                = evm(filteredDataSymbolSync);
