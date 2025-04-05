@@ -1,7 +1,7 @@
 clear all; close all;
 
 % User tunable (samplesPerSymbol>=decimation)
-samplesPerSymbol = 12; decimation = 4;
+samplesPerSymbol = 8; decimation = 4;
 %% System set up
 % Set up radio
 tx = sdrtx('Pluto','Gain',-10);
@@ -61,4 +61,3 @@ end
 % Calculate EVM
 BaselineEVM        = evm(o)
 TimingCorrectedEVM = evm(o_corrected)
-
