@@ -1,56 +1,95 @@
 clear all; close all;
 
 % Setup debugging flags
-plotTiming = true;
+plotTiming   = true;
 xcorrVisuals = false;
 
-% Show Barker Autocorrelations search example
-sequenceLength = 13;
-hBCode = comm.BarkerCode('Length',7,'SamplesPerFrame', sequenceLength);
-seq = step(hBCode);
-gapLen = 100;
-gapLenEnd = 200;
-gen = @(Len) 2*randi([0 1],Len,1)-1;
-y = [gen(gapLen); seq; gen(gapLenEnd)];
+% There are two primary ways to estimate the start of a frame in MATLAB:
+% the xcorr and filter functions.
+% Method 1: xcorr
+%corr = xcorr(y,seq);
 
-fprintf('Sequence length: %d\n', sequenceLength);
-fprintf('Timing data using xcorr method:\n');
-
-% There are two primary ways to 
-tic;
-corr = xcorr(y,seq);
-toc;
-%figure; plot(corr);
-% Alternative option (required for question 1): use filter instead of xcorr
+% Method 2: filter
 % This implementation does NOT give a peak, because the filter function does
 % not include a time reversal
 %corr = filter(seq, 1, y);
 % To implement time reversal:
 %corr = filter(seq(end:-1:1), 1, y);
 % To pre-load to get rid of delay from preamble sequence:
-fprintf('Timing data using filter method:\n');
-tic;
-corr = filter(seq(end:-1:1), 1, y(sequenceLength:end), y(1:sequenceLength-1));
-toc;
-%figure; plot(corr);
+%corr = filter(seq(end:-1:1), 1, y(length(seq):end), y(1:length(seq)-1));
+sequenceLength = [10 100 1000 10000 100000];
 
-sequenceLength = [10 100 1000 10000];
+timingDataXCorr  = [];
+timingDataFilter = [];
 
-%{
 for lengthInd = 1:length(sequenceLength)
+
+    % Setup data to be used
     currentSeqLength = sequenceLength(lengthInd);
+    [y, seq] = BarkerAutoCorr(currentSeqLength);
+    
+    % Start timing for xcorr method
+    tic;
+    xcorr(y,seq);
+    timingDataXCorr(lengthInd) = toc;
 
+    % Repeat the same timing benchmark using the filter method
+    tic;
+    filter(seq(end:-1:1), 1, y(length(seq):end), y(1:length(seq)-1));
+    timingDataFilter(lengthInd) = toc;
 end
-%}
 
+if plotTiming
+
+    % Setup basic labels and data needed
+    xlabels        = ["XCorr Method", "Filter Method"];
+    compTimingData = [timingDataXCorr; timingDataFilter];
+
+    % Plot data
+    figure;
+    title('Sequence Length vs Execution Time of MATLAB Estimation Methods');
+    hold on;
+    dataBars = bar(xlabels, compTimingData);
+    ylabel("Execution time (s)");
+
+    % Create a legend for the different bars - this will be dependent on
+    % the values set in 'sequenceLength', above.
+    set(dataBars, {'DisplayName'}, {'10','100','1000', '10000', '100000'}')
+    leg = legend();
+    title(leg, 'Sequence Length');
+    for dataLabelInd = 1:length(sequenceLength)
+        dataBars(dataLabelInd).Labels = dataBars(dataLabelInd).YData;
+    end
+    hold off;
+
+    % Next, plot benchmark timing as ratio:
+    figure;
+    title('Timing Performance Ratio of XCorr Method / Filter Method');
+    hold on;
+    dataBars = bar(string(sequenceLength), timingDataXCorr ./ timingDataFilter);
+    xlabel('Sequence Length');
+    ylabel('Ratio');
+    hold off;
+end
+
+% Moved class sample code into a different block that may or may not be
+% executed depending on the study.
 if xcorrVisuals
+    % Show Barker Autocorrelations search example
+    sequenceLength = 13;
+    hBCode = comm.BarkerCode('Length',7,'SamplesPerFrame', sequenceLength);
+    seq = step(hBCode);
+    gapLen = 100;
+    gapLenEnd = 200;
+    gen = @(Len) 2*randi([0 1],Len,1)-1;
+    y = [gen(gapLen); seq; gen(gapLenEnd)];
+    corr = xcorr(y,seq);
 
     L = length(corr);
     [v,i] = max(corr);
 
     %% Plot
-    close all;
-    figure(1);
+    figure;
     subplot(2,1,1);
     h1 = plot(y);grid on;title('Sequence');xlabel('Samples');
     hold on;
@@ -102,4 +141,16 @@ if xcorrVisuals
     h=quiver(p1(1),p1(2),dp(1),dp(2),0, 'Color','k');
     text(dp(1)/4,25, 'Zeros Lag','FontSize',11)
     hold off;
+end
+
+% Moves common code into function that can be called in the context of the
+% loop above for different sequence lengths.
+function [y, seq] = BarkerAutoCorr(sequenceLength)
+    % Show Barker Autocorrelations search example
+    hBCode = comm.BarkerCode('Length',7,'SamplesPerFrame', sequenceLength);
+    seq = step(hBCode);
+    gapLen = 100;
+    gapLenEnd = 200;
+    gen = @(Len) 2*randi([0 1],Len,1)-1;
+    y = [gen(gapLen); seq; gen(gapLenEnd)];
 end
