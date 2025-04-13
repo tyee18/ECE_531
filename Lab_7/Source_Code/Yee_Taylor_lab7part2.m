@@ -1,3 +1,6 @@
+%% Debugging flags
+visuals = false;
+displayPayload = true;
 
 %% General system details
 sampleRateHz = 1e6; % Sample rate
@@ -16,6 +19,7 @@ bits = double(ASCII2bits('Arizona')); % Generate message (use booktxt.m for a lo
 hBCode = comm.BarkerCode('Length',7,'SamplesPerFrame', barkerLength/2);
 barker = step(hBCode)>0;
 frame = [barker;barker;bits];
+preamble = [barker;barker];
 frameSize = length(frame);
 modD = comm.DBPSKModulator();
 bMod = clone(modD);
@@ -67,8 +71,11 @@ for k=1:numFrames
     filteredData = step(RxFlt, noisyData);
     
     % Visualize Correlation
-    step(hts1, filteredData);pause(0.1);
+    if visuals
+        step(hts1, filteredData);pause(0.1);
+    end
     
+    %{
     % Remove offset and filter delay
     frameStart = delay + RxFlt.FilterSpanInSymbols + 1;
     frameHatNoPreamble = filteredData(frameStart:frameStart+frameSize-1);
@@ -79,8 +86,37 @@ for k=1:numFrames
     BER(k) = mean(dataHat-frame);
     PER(k) = BER(k)>0;
     
-%     payloadStart = barkerLength+1; % Trim preamble to display ASCII payload
-%     rxTxt = bits2ASCII(dataHat(payloadStart:end), 1);
+    if displayPayload
+        payloadStart = barkerLength+1; % Trim preamble to display ASCII payload
+        rxTxt = bits2ASCII(dataHat(payloadStart:end), 1);
+    end
+    %}
+    
+    % New code: matched filter
+    mf = bMod(preamble);
+
+    % Remove offset and filter delay - do this now based on xcorr or filter
+    % functions
+    corr = filter(mf(end:-1:1), 1, filteredData(length(mf):end), filteredData(1:length(mf)-1));
+    % Determine max value
+    [m, mf_delay] = max(corr);
+    plot(real(corr));
+
+    frameStartWPreamble = mf_delay + RxFlt.FilterSpanInSymbols + 1;
+    frameHatWPreamble = filteredData(frameStartWPreamble:frameStartWPreamble+frameSize-1);
+    
+    % Demodulate and check
+    dataHatWPreamble = demod.step(frameHatWPreamble);
+    demod.release(); % Reset reference
+    BER(k) = mean(dataHatWPreamble-frame);
+    PER(k) = BER(k)>0;
+    
+    dataMF = demod.step(frameHatWPreamble);
+
+    if displayPayload
+        payloadStart = barkerLength+1; % Trim preamble to display ASCII payload
+        rxTxt = bits2ASCII(dataHatWPreamble(payloadStart:end), 1);
+    end
 end
 
 % Result
