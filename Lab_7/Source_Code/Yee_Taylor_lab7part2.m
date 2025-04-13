@@ -62,6 +62,7 @@ for k=1:numFrames
     delay = randi([0 frameSize-1-TxFlt.FilterSpanInSymbols]);% Delay should be at worst 1 frameSize-"filter delay"
     delayedSignal = [zeros(delay,1); modulatedData;...
         zeros(frameSize-delay,1)];
+    %plot(real(delayedSignal), '-or');
     
     % Filter signal
     filteredTXDataDelayed = step(TxFlt, delayedSignal);
@@ -71,7 +72,8 @@ for k=1:numFrames
     
     % Filter signal
     filteredData = step(RxFlt, noisyData);
-    plot(real(filteredData)); % todo: delete
+    % hold on; plot(real(filteredData), '-og');legend('delayedSignal',...
+    %'filteredData');holdoff;
     
     % Visualize Correlation
     if visuals
@@ -95,10 +97,11 @@ for k=1:numFrames
     end
     %}
     
-    % New code: matched filter
+    % Matched filter on RX
     mf = bMod(preamble);
 
     % Remove offset and filter delay - do this now based on filter function
+    % instead of using known delay
     corr = filter(mf(end:-1:1), 1, filteredData(length(mf):end), filteredData(1:length(mf)-1));
     % Determine max value
     [m, mf_delay] = max(corr);
@@ -107,7 +110,7 @@ for k=1:numFrames
     % Not sure why we needed to get rid of the "RxFlt.FilterSpanInSymbols +
     % 1" from the above implementation - maybe because this was already
     % accounted for in using the filter function + accounting for the
-    % preamble in the mf?
+    % preamble in the matched filter?
     frameStartWPreamble = mf_delay;
     frameHatWPreamble = filteredData(frameStartWPreamble:frameStartWPreamble+frameSize-1);
     
@@ -126,7 +129,8 @@ for k=1:numFrames
 end
 
 % Result
-fprintf('PER %2.2f\n',mean(PER));
+fprintf('SNR: %d\n',snr);
+fprintf('PER: %2.2f\n',mean(PER));
 
 
 
