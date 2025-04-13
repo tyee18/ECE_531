@@ -1,3 +1,5 @@
+clear all; close all;
+
 %% Debugging flags
 visuals = false;
 displayPayload = true;
@@ -48,7 +50,7 @@ hts1 = dsp.TimeScope('SampleRate', sampleRateHz,'TimeSpan', frameSize*2/sampleRa
 hAP = dsp.ArrayPlot;
 hAP.YLimits = [-3 35];
 
-%% Demodualtor
+%% Demodulator
 demod = comm.DBPSKDemodulator;
 
 %% Model of error
@@ -69,17 +71,18 @@ for k=1:numFrames
     
     % Filter signal
     filteredData = step(RxFlt, noisyData);
+    plot(real(filteredData)); % todo: delete
     
     % Visualize Correlation
     if visuals
         step(hts1, filteredData);pause(0.1);
     end
     
-    %{
+    
     % Remove offset and filter delay
     frameStart = delay + RxFlt.FilterSpanInSymbols + 1;
     frameHatNoPreamble = filteredData(frameStart:frameStart+frameSize-1);
-    
+    %{
     % Demodulate and check
     dataHat = demod.step(frameHatNoPreamble);
     demod.release(); % Reset reference
@@ -93,16 +96,19 @@ for k=1:numFrames
     %}
     
     % New code: matched filter
-    mf = bMod(preamble);
+    mf = preamble;
 
-    % Remove offset and filter delay - do this now based on xcorr or filter
-    % functions
+    % Remove offset and filter delay - do this now based on filter function
     corr = filter(mf(end:-1:1), 1, filteredData(length(mf):end), filteredData(1:length(mf)-1));
     % Determine max value
     [m, mf_delay] = max(corr);
-    plot(real(corr));
+    %plot(real(corr));
 
-    frameStartWPreamble = mf_delay + RxFlt.FilterSpanInSymbols + 1;
+    % Not sure why we needed to get rid of the "RxFlt.FilterSpanInSymbols +
+    % 1" from the above implementation - maybe because this was already
+    % accounted for in using the filter function + accounting for the
+    % preamble in the mf?
+    frameStartWPreamble = mf_delay;
     frameHatWPreamble = filteredData(frameStartWPreamble:frameStartWPreamble+frameSize-1);
     
     % Demodulate and check
