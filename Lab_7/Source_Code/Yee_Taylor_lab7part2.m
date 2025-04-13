@@ -96,7 +96,7 @@ for k=1:numFrames
     %}
     
     % New code: matched filter
-    mf = preamble;
+    mf = bMod(preamble);
 
     % Remove offset and filter delay - do this now based on filter function
     corr = filter(mf(end:-1:1), 1, filteredData(length(mf):end), filteredData(1:length(mf)-1));
