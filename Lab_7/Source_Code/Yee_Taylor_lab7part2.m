@@ -13,7 +13,7 @@ filterSymbolSpan = 4;
 barkerLength = 26; % Must be even
 
 %% Impairments
-snr = 0:10;
+snr = 0:20;
 
 %% Generate symbols
 bits = double(ASCII2bits('Arizona')); % Generate message (use booktxt.m for a long message)
@@ -76,7 +76,7 @@ for snrInd = 1:length(snr)
         % Filter signal
         filteredData = step(RxFlt, noisyData);
         % hold on; plot(real(filteredData), '-og');legend('delayedSignal',...
-        %'filteredData');holdoff;
+        % 'filteredData');hold off;
 
         % Visualize Correlation
         if visuals
@@ -84,11 +84,11 @@ for snrInd = 1:length(snr)
         end
 
 
+        %{
         % Remove offset and filter delay
         frameStart = delay + RxFlt.FilterSpanInSymbols + 1;
-        frameHatNoPreamble = filteredData(frameStart:frameStart+frameSize-1);
-        
-        %{
+        frameHat   = filteredData(frameStart:frameStart+frameSize-1);
+
         % Demodulate and check
         dataHat = demod.step(frameHatNoPreamble);
         demod.release(); % Reset reference
@@ -106,6 +106,15 @@ for snrInd = 1:length(snr)
 
         % Remove offset and filter delay - do this now based on filter function
         % instead of using known delay
+
+        % NOTE: There appears to be a mismatch here. Sometimes this is
+        % correct, but sometimes this max provides a wildly incorrect (aka
+        % mismatched) delay value. Troubleshooting...this appears to be
+        % related to SNR values. Testing with this was done with a set
+        % SNR = 15, and appears to be optimized for SNR values of AT LEAST
+        % 6. Anything less than that, and the delay will always be somehow
+        % VASTLY off, such that the code will crash, hence the need for the
+        % try-catch block below.
         corr = filter(mf(end:-1:1), 1, filteredData(length(mf):end), filteredData(1:length(mf)-1));
         % Determine max value
         [m, mf_delay] = max(corr);
@@ -115,20 +124,24 @@ for snrInd = 1:length(snr)
         % 1" from the above implementation - maybe because this was already
         % accounted for in using the filter function + accounting for the
         % preamble in the matched filter?
-        frameStartWPreamble = mf_delay;
-        frameHatWPreamble = filteredData(frameStartWPreamble:frameStartWPreamble+frameSize-1);
+        frameStartNoPreamble = mf_delay;
+        try
+            frameHatNoPreamble = filteredData(frameStartNoPreamble:frameStartNoPreamble+frameSize-1);
+        catch me
+            fprintf('%s\b', me.message);
+        end
 
         % Demodulate and check
-        dataHatWPreamble = demod.step(frameHatWPreamble);
+        dataHatNoPreamble = demod.step(frameHatNoPreamble);
         demod.release(); % Reset reference
-        BER(k) = mean(dataHatWPreamble-frame);
+        BER(k) = mean(dataHatNoPreamble-frame);
         PER(k) = BER(k)>0;
 
-        dataMF = demod.step(frameHatWPreamble);
+        dataMF = demod.step(frameHatNoPreamble);
 
         if displayPayload
             payloadStart = barkerLength+1; % Trim preamble to display ASCII payload
-            rxTxt = bits2ASCII(dataHatWPreamble(payloadStart:end), 1);
+            rxTxt = bits2ASCII(dataHatNoPreamble(payloadStart:end), 1);
         end
     end
 
