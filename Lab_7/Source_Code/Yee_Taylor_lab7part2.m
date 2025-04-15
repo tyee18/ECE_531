@@ -2,7 +2,7 @@ clear all; close all;
 
 %% Debugging flags
 visuals = false;
-displayPayload = true;
+displayPayload = false;
 
 %% General system details
 sampleRateHz = 1e6; % Sample rate
@@ -13,7 +13,7 @@ filterSymbolSpan = 4;
 barkerLength = 26; % Must be even
 
 %% Impairments
-snr = 15;
+snr = 0:10;
 
 %% Generate symbols
 bits = double(ASCII2bits('Arizona')); % Generate message (use booktxt.m for a long message)
@@ -38,13 +38,6 @@ RxFlt = comm.RaisedCosineReceiveFilter(...
     'DecimationFactor', samplesPerSymbol);% Set to filterUpsample/2 when introducing timing estimation
 RxFltRef = clone(RxFlt);
 
-%% Add noise source
-chan = comm.AWGNChannel( ...
-    'NoiseMethod',  'Signal to noise ratio (SNR)', ...
-    'SNR',          snr, ...
-    'SignalPower',  1, ...
-    'RandomStream', 'mt19937ar with seed');
-
 %% Setup visualization object(s)
 hts1 = dsp.TimeScope('SampleRate', sampleRateHz,'TimeSpan', frameSize*2/sampleRateHz);
 hAP = dsp.ArrayPlot;
@@ -52,10 +45,20 @@ hAP.YLimits = [-3 35];
 
 %% Demodulator
 demod = comm.DBPSKDemodulator;
+PERdata = [];
 
 %% Model of error
+for snrInd = 1:length(snr)
+    currentSNR = snr(snrInd);
 BER = zeros(numFrames,1);
 PER = zeros(numFrames,1);
+
+%% Add noise source
+chan = comm.AWGNChannel( ...
+    'NoiseMethod',  'Signal to noise ratio (SNR)', ...
+    'SNR',          currentSNR, ...
+    'SignalPower',  1, ...
+    'RandomStream', 'mt19937ar with seed');
 for k=1:numFrames
     
     % Insert random delay and append zeros
@@ -128,9 +131,20 @@ for k=1:numFrames
     end
 end
 
+PERdata(snrInd) = mean(PER);
+
 % Result
-fprintf('SNR: %d\n',snr);
+fprintf('SNR: %d\n',currentSNR);
 fprintf('PER: %2.2f\n',mean(PER));
+end
+
+figure;
+title('SNR vs PER of Matched Filter for Frame Synchronization');
+hold on;
+bar(string(snr), PERdata);
+xlabel('SNR Value (dB)');
+ylabel('Packet Error Rate (PER)');
+hold off;
 
 
 
