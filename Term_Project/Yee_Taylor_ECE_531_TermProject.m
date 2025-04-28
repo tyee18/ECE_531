@@ -25,34 +25,35 @@ minToSec = 1/60; % converting from minutes to seconds
 Fs = 48000; % sampling rate of audio to file sink - different than sampling rate of audio live output stream
 % calculated by taking (sample rate at LPF / decimation at LPF) /
 % decimation at demodulator.
-% Note: for some reason, this sampling frequency needs to be double what
-% the GRC says it should be for accurate timing.
+freqRange = [60 250]; % range of frequencies to look for changes in to calculate BPM
+%freqRange = [20 60];
+% 60 - 250 Hz is generally where the "bass" range lives, and provides the
+% most consistent rhythm.
 
-seconds_to_read = 15; % can be changed based on user-specified time
-samples_to_read = floor(seconds_to_read * Fs);
+maxBPM = 160;
+bps = maxBPM * minToSec;
 
-%[fid, msg] = fopen("Pluto_Audio_Samples\30s_clips_complex32\tompetty_freefallin", 'r');
+% Initialize variables
+numOnsetsDetectedInSamples = 0;
+numOnsetsDetectedInBPM = 0;
+secondsToRead = 15; % can be changed based on user-specified time
+samplesToRead = floor(secondsToRead * Fs);
+
 songID = 'taste_sabrinacarpenter';
 [fid, msg] = fopen("Pluto_Audio_Samples\30s_clips_complex32\taste_sabrinacarpenter", 'r');
-data = fread(fid, [2 samples_to_read], "*float32");
-%data = fread(fid, "*float32");
+data = fread(fid, [2 samplesToRead], "*float32");
 fclose(fid);
 
 audioClipTime = length(data)/Fs; % needed for bpm calculation downstream
 
 data = complex(data(1, :), data(2, :)); % converts stereo (dual channel) audio to mono (single channel)
-freqRange = [60 250]; % range of frequencies to look for changes in to calculate BPM
-%freqRange = [20 60];
-% 60 - 250 Hz is generally where the "bass" range lives, and provides the
-% most consistent rhythm.
-maxBPM = 160;
 maxBPMAdjusted = maxBPM * (audioClipTime * minToSec); % this can be changed, but most mainstream songs tend to sit in the 80-130 BPM range. Use 200 as a bit of overkill, can be refined.
 maxOnsetsAllowedinSamples = (Fs / maxBPMAdjusted) * secToMin; % expresses max BPM in terms of samples instead of time
+% TODO: maxOnsets to be used later on, if the calculations somehow have
+% more onsets than allowable for songs
 
-bps = maxBPM * minToSec;
 bpsToSamples = Fs / bps;
 
-%fft_data = fft(data);
 filteredData = bandpass(data, freqRange, Fs);
 
 % Find first onset index
@@ -66,8 +67,10 @@ firstPeakStart = firstOnset-(bpsToSamples/2);
 % TODO: DELETE LATER. Leaving as a note for how to loop / advance
 nextPeakStart = firstPeakStart + bpsToSamples;
 
+% Now, loop through entirety of filteredData
+
 % Error handling for if recalculated first onset start is OOB of clip -
-% just set it to the start of the 
+% just set it to the start of the clip
 if firstPeakStart < 1
     firstPeakStart = 1;
 end
@@ -77,9 +80,9 @@ if debugFlag
     % this only plots the real component (which is fine because for our
     % audio case, real and imaginary components will always be identical)
     figure;
-    plot([1:samples_to_read], filteredData);
+    plot([1:samplesToRead], filteredData);
     hold on;
-    xline(firstOnset-(bpsToSamples/2):bpsToSamples:samples_to_read, '--r');
+    xline(firstOnset-(bpsToSamples/2):bpsToSamples:samplesToRead, '--r');
     title(['Filtered Signal of ' songID]); xlabel('Number of samples');
 
     % Plots the original and filtered signals in terms of time and
