@@ -25,22 +25,25 @@ minToSec = 1/60; % converting from minutes to seconds
 Fs = 48000; % sampling rate of audio to file sink - different than sampling rate of audio live output stream
 % calculated by taking (sample rate at LPF / decimation at LPF) /
 % decimation at demodulator.
-freqRange = [60 250]; % range of frequencies to look for changes in to calculate BPM
+freqRange = [60 150]; % range of frequencies to look for changes in to calculate BPM
 %freqRange = [20 60];
 % 60 - 250 Hz is generally where the "bass" range lives, and provides the
 % most consistent rhythm.
 
+beatThreshold = 0.15; % use this for freqRange [20 60] aka sub-bass
+%beatThreshold = 0.3; % use this for freqRange [60 150] aka bass
+
 maxBPM = 160;
-bps = maxBPM * minToSec;
+maxBPS = maxBPM * minToSec;
 
 % Initialize variables
 numOnsetsDetectedInSamples = 0;
 numOnsetsDetectedInBPM = 0;
-secondsToRead = 15; % can be changed based on user-specified time
+secondsToRead = 30; % can be changed based on user-specified time
 samplesToRead = floor(secondsToRead * Fs);
 
-songID = 'taste_sabrinacarpenter';
-[fid, msg] = fopen("Pluto_Audio_Samples\30s_clips_complex32\taste_sabrinacarpenter", 'r');
+songID = 'smooth-santana';
+[fid, msg] = fopen("Pluto_Audio_Samples\30s_clips_complex32\smooth_santana", 'r');
 data = fread(fid, [2 samplesToRead], "*float32");
 fclose(fid);
 
@@ -52,28 +55,31 @@ maxOnsetsAllowedinSamples = (Fs / maxBPMAdjusted) * secToMin; % expresses max BP
 % TODO: maxOnsets to be used later on, if the calculations somehow have
 % more onsets than allowable for songs
 
-bpsToSamples = Fs / bps;
+minSampleDelta = Fs / maxBPS;
 
+% Apply bandpass filter to isolate specified frequency range
 filteredData = bandpass(data, freqRange, Fs);
 
 % Find first onset index
-firstOnset = find(real(filteredData) > abs(0.3), 1);
+% For consistency, assume that the "onset" starts at the positive
+% wavelength energy peak, not the negative
+firstOnset = find(real(filteredData) > beatThreshold, 1);
+possibleBeatOnsets = find(real(filteredData) > beatThreshold);
+tempFinalOnsets = [firstOnset];
+tempIndex = 2;
 
-% Attempts to "center" first onset by assuming that an onset looks like a
-% nice smooth "bump" (which is probably unrealistic, doesn't account for
-% tapered beats, etc.)
-firstPeakStart = firstOnset-(bpsToSamples/2);
-
-% TODO: DELETE LATER. Leaving as a note for how to loop / advance
-nextPeakStart = firstPeakStart + bpsToSamples;
-
-% Now, loop through entirety of filteredData
-
-% Error handling for if recalculated first onset start is OOB of clip -
-% just set it to the start of the clip
-if firstPeakStart < 1
-    firstPeakStart = 1;
+for index = 2:length(possibleBeatOnsets)
+    currentIndex = tempFinalOnsets(tempIndex - 1);
+    % Next index has to be AT LEAST minBPSToSamples ahead of the current
+    % index
+    testBeatInd = possibleBeatOnsets(index);
+    if testBeatInd > currentIndex + minSampleDelta
+        tempFinalOnsets = [tempFinalOnsets testBeatInd];
+        tempIndex = tempIndex + 1;
+    end
 end
+avgBeatsPerSample = mean(diff(tempFinalOnsets));
+finalBeatsPerMin  = (Fs / avgBeatsPerSample) * secToMin
 
 if debugFlag
     % Plots the filtered signal in terms of number of samples. Note that
@@ -82,7 +88,8 @@ if debugFlag
     figure;
     plot([1:samplesToRead], filteredData);
     hold on;
-    xline(firstOnset-(bpsToSamples/2):bpsToSamples:samplesToRead, '--r');
+    %xline(firstOnset-(minBPSToSamples/2):minBPSToSamples:samplesToRead, '--r');
+    xline(tempFinalOnsets, '--r');
     title(['Filtered Signal of ' songID]); xlabel('Number of samples');
 
     % Plots the original and filtered signals in terms of time and
