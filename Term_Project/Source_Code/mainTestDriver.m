@@ -93,7 +93,7 @@ function mainTestDriver(audioFile, songID, varargin) % bpfFreq, beatThreshold, f
     showOnsetData(filteredData, onsetsDetected, songID);
     %{
     % Plotting available to show bandpass filter original vs filtered
-    signal
+    % signal
     bandpass(data, bpfFreq, fs);
     %}
 end
