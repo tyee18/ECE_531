@@ -1,39 +1,24 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Name: Taylor Yee
-% Course: ECE 531
-% Assignment: ECE 531 Term Project
-% Description: TBD: FILL ME
-% Function name list:
-%     - testDriver
-%     - extractAudio
-%     - resampleAudio
-%     - normalizeAudio
-%     - determineChangePoints
-%     - determineOnsets
-%     - findNoteFreqs
-%     - convertFreqsToNotes
-% Each function comes with its own header, as well as a list of required
-% inputs, optional inputs, and outputs.
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Function Name: Yee_Taylor_ECE_531_TermProject
-% Description: This function reads in the audio file provided,
-%              and outputs the data, along with the sampling frequency
-%              embedded in the audio file.
+% Function Name: mainTestDriver
+% Author:        Taylor Yee
+% Description:   This function reads in the audio file provided,
+%                and prints the calculated beats per minute (BPM) to the
+%                command window, along with other helpful identifying info,
+%                and plots the data with detected onsets, or "beats".
 % Required Inputs:
 %     - audioFile: The full path to the audio file to be read.
-%     - songID: How the song will be identified in plots.
+%     - songID:    How the song will be identified in plots.
 % Optional Inputs:
-%     - debugFlag: Either 0 or 1. If set to 1, will also plot figures.
-%                  Default is set to 0 (no plots).
-% Outputs:
-%     - audioData:  The audio data.
-%     - fs: The sampling frequency of the audio file provided, in Hz.
+%     - bpfFreq:       The bandpass filter frequency range. Default
+%                      is 60 - 250 Hz.
+%     - beatThreshold: The minimum wave amplitude threshold to be
+%                      considered a "beat". Default is 0.30.
+%     - fs:            Sampling frequency of clip. Default is 48000 Hz.
+%     - secondsToRead: How many seconds of audio to read out for BPM calcs.
+%                      Default is 30.0s.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function Yee_Taylor_ECE_531_TermProject(audioFile, songID, varargin) % bpfFreq, beatThreshold, fs, secondsToRead)
+function mainTestDriver(audioFile, songID, varargin) % bpfFreq, beatThreshold, fs, secondsToRead)
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Some quick notes on default values chosen below:
@@ -42,7 +27,7 @@ function Yee_Taylor_ECE_531_TermProject(audioFile, songID, varargin) % bpfFreq, 
     %%   mix, and understandably, is where most of the rhythm and bass can
     %%   be found. The "sub-bass" (20-60Hz) zone is another good option.
     %%
-    %% - beatThresold = 0.3. The amplitude of the waveform that constitutes
+    %% - beatThresold = 0.25. The amplitude of the waveform that constitutes
     %%   a "beat". There's not really any math behind this value - it was
     %%   chosen fairly arbitrarily after studying several waveforms using
     %%   the bass frequency zone. For the sub-bass, use 0.15.
@@ -72,7 +57,7 @@ function Yee_Taylor_ECE_531_TermProject(audioFile, songID, varargin) % bpfFreq, 
     % If no additional arguments are provided, set all to default values.
     else
         bpfFreq       = [60 250];
-        beatThreshold = 0.30;
+        beatThreshold = 0.25;
         fs            = 48000;
         secondsToRead = 30;
     end
@@ -81,7 +66,11 @@ function Yee_Taylor_ECE_531_TermProject(audioFile, songID, varargin) % bpfFreq, 
     minToSec = 1/60;
     % This can be changed, but most mainstream songs tend to sit in the
     % 80-130 BPM range.
-    maxBPM = 160;
+    minBPM = 60;
+    minBPS = minBPM * minToSec;
+    maxOnsetSampleDelta = fs / minBPS;
+
+    maxBPM = 180;
     maxBPS = maxBPM * minToSec;
     minOnsetSampleDelta = fs / maxBPS;
 
@@ -91,19 +80,20 @@ function Yee_Taylor_ECE_531_TermProject(audioFile, songID, varargin) % bpfFreq, 
     data         = importAudio(audioFile, fs, secondsToRead);
     filteredData = bandpass(data, bpfFreq, fs);
 
-    [onsetsDetected, beatsPerMinute] = determineBPM(filteredData, fs, beatThreshold, minOnsetSampleDelta);
-    fprintf('*-----------------------------------------------------------*');
+    [onsetsDetected, beatsPerMinute] = determineBPM(filteredData, fs, beatThreshold, minOnsetSampleDelta, maxOnsetSampleDelta);
+    fprintf('*-----------------------------------------------------------*\n');
     fprintf('SongID: %s\n', songID);
-    fprintf('Sample Rate: %d\n', fs);
     fprintf('Freq Range: %d - %d Hz\n', bpfFreq(1), bpfFreq(end));
+    fprintf('Beat Threshold: %d\n', beatThreshold);
+    fprintf('Sample Rate: %d\n', fs);
     fprintf('Seconds of Data Analyzed: %d\n', secondsToRead);
     fprintf('Calculated BPM: %d beats per minute\n', floor(beatsPerMinute));
-    fprintf('*-----------------------------------------------------------*');
+    fprintf('*-----------------------------------------------------------*\n');
 
     showOnsetData(filteredData, onsetsDetected, songID);
     %{
-    if plotBPF
-        showBandpassData(data, bpfFreq, fs);
-    end
+    % Plotting available to show bandpass filter original vs filtered
+    signal
+    bandpass(data, bpfFreq, fs);
     %}
 end

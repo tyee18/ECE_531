@@ -1,7 +1,8 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Function Name: importAudio
-% Description: This function imports audio data provided from GNU Radio
-%              flowgraph fileSink.
+% Author:        Taylor Yee
+% Description:   This function imports audio data provided from GNU Radio
+%                flowgraph fileSink.
 % Inputs:
 %     - file:          Full path to the audio data.
 %     - sampFreq:      The sampling frequency of the data.
