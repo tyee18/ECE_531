@@ -19,12 +19,14 @@ function [] = showOnsetData(filteredData, sampFreq, onsetsDetected, songID)
     figName = strcat("Filtered Signal of ", songID, " with Onsets Detected");
 
     %% Convert inputs to time domain for plotting
-    xData = [(1:length(filteredData))/sampFreq];
-    xLines = onsetsDetected / sampFreq;
+    xData    = [(1:length(filteredData))/sampFreq];
+    xLines   = onsetsDetected / sampFreq;
+    newXData = filteredData(onsetsDetected);
 
     %% Plot Data
     plot(xData, filteredData);
-    hold on; xline(xLines, '--m');
+    hold on; scatter(xLines, newXData, 100, 'r', 'x', 'LineWidth', 2);
+    legend('Filtered Data', 'Beat Detected');
     title(figName); xlabel('Time (s)'); ylabel('Amplitude');
 
     %% Save figure
